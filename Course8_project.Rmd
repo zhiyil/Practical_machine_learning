@@ -1,0 +1,99 @@
+---
+title: "Course porject: Practical Machine Learning on Qualitative Activity Recognition"
+author: "Zhiyi Liu"
+date: "9/2/2017"
+output: html_document
+---
+
+## Introduction
+
+Personal movement devices such as Jawbone Up, Nike FuelBand, and Fitbit, are popular and can be used to collect a large amount of data about personal activity. In this project, we focus on qualifying self movement to automatically assessing movements in a particular dumbell lifting simulation. Recognizting particular movements and providing feedback on how well these movements are executed can significantly assist with automation of effective training.
+
+In the simulation, six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). These are also the outcome variable (designated as 'classe' in the datasets) we want to predict in this analysis. The data were collected from accelerometers on the belt, forearm, arm, and dumbell. More information is available from the website here: [http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)
+
+
+## Pre-processing of data
+
+Set work directory and download the datasets
+```{r eval=FALSE}
+setwd("/Users/zliu11/R_for_DScourses/Course8/CourseProject")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "pml-training.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "pml-testing.csv")
+```
+
+Read datasets, replacing all empty, "NA", and "#DIV/0!" datapoints with "NA"
+```{r}
+library(data.table) # load the data.table library
+setwd("/Users/zliu11/R_for_DScourses/Course8/CourseProject")
+trainingDataset <- fread("/Users/zliu11/R_for_DScourses/Course8/CourseProject/pml-training.csv", na.strings = c("NA","",'#DIV/0!'), data.table = F)
+testingDataset <- fread("/Users/zliu11/R_for_DScourses/Course8/CourseProject/pml-testing.csv", na.strings = c("NA","",'#DIV/0!'), data.table = F)
+```
+
+Clean the data, removing all columns (variables) containing "NA".
+
+We have noticed that in the dataset many columns contain NAs. These columns (variables) don't contribute to the final model. Therefore we remove these variables.
+```{r}
+trainingDataset <- trainingDataset[,colSums(is.na(trainingDataset)) == 0]
+trainingDataset <- trainingDataset[,8:length(names(trainingDataset))] # only keep relevant variables
+testingDataset <- testingDataset[, colSums(is.na(testingDataset)) == 0]
+testingDataset <- testingDataset[,8:length(names(testingDataset))] # only keep relevant variables
+```
+
+Split the trainingDataset into training and testing subsets.
+
+We further split the trainingDataset into training and testing subsets for generating the fit models, as well as for conducting cross validation.
+```{r message=FALSE}
+library(ggplot2); library(caret)
+set.seed(5839)
+inTrain <- createDataPartition(y=trainingDataset$classe, p=0.6, list = F)
+training <- trainingDataset[inTrain,]
+testing <- trainingDataset[-inTrain,]
+```
+
+## Model Fitting
+We first try the random forests method, followed by the boosting method. We will compare the two models and select the one having the better performance. 
+
+### 1. Random Forests
+```{r message=FALSE, cache=TRUE}
+set.seed(12324)
+library(randomForest)
+modRF <- train(classe ~ ., data = training, method = "rf", trControl=trainControl(method='cv'), number=5)
+modRF$finalModel
+predRF <- predict(modRF, testing)
+accuRF <- confusionMatrix(predRF, testing$classe) # calculate the accuracy
+accuRF
+```
+
+### 2. Boosting
+```{r message=FALSE, cache=TRUE, results='hide'}
+set.seed(2333)
+library(gbm)
+modGBM <- train(classe ~ ., data = training, method ="gbm")
+modGBM$finalModel
+```
+```{r message=FALSE}
+predGBM <- predict(modGBM, testing)
+accuGBM <- confusionMatrix(predGBM, testing$classe)
+accuGBM
+```
+
+Therefore, we see that the accuracy for modRF (random forests) is greater than that for modGBM (boosting). We choose the method of Random Forests for our final model fitting. To make it clear, let's have a look at the significant contributing variables in `modRF`:
+```{r message=FALSE}
+varImp(modRF)
+```
+
+A plot will demonstrate the above point:
+```{r}
+library(ggplot2)
+p <- ggplot(data = training, aes(x=roll_belt, y=pitch_forearm, color = factor(classe))) +
+        geom_point(alpha=0.4)
+p
+```
+
+## Model validation
+We use the `testingDataset` to validate the Random Forests model, `modRF`, and get the predictions for the questions asked by the assignment:
+```{r}
+predValidate <- predict(modRF, testingDataset)
+predValidate
+```
+
