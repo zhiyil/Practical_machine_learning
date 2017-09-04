@@ -83,7 +83,7 @@ varImp(modRF)
 ```
 
 A plot will demonstrate the above point:
-```{r}
+```{r fig.height=3.6, fig.width=5.4, fig.align='center'}
 library(ggplot2)
 p <- ggplot(data = training, aes(x=roll_belt, y=pitch_forearm, color = factor(classe))) +
         geom_point(alpha=0.4)
